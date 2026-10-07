@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry"><rect><x>0</x><y>0</y><width>1000</width><height>720</height></rect></property>
+  <property name="windowTitle"><string>Инерциальная навигация — вариант 1</string></property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,0">
+    <item><widget class="TrajectoryView" name="graphicsView"><property name="minimumSize"><size><width>500</width><height>400</height></size></property><property name="toolTip"><string>Синяя — оценка ИНС; зелёная — истина. Координаты в метрах, Y направлен вниз. Колесо — масштаб, левая кнопка — перемещение, F — автообзор.</string></property></widget></item>
+    <item><layout class="QVBoxLayout" name="controlsLayout">
+     <item><widget class="QLabel" name="labelMotion"><property name="text"><string>Режим движения:</string></property><property name="buddy"><cstring>comboMotion</cstring></property></widget></item>
+     <item><widget class="QComboBox" name="comboMotion"><property name="toolTip"><string>Для смены режима после запуска нажмите Сброс.</string></property><item><property name="text"><string>Постоянное ускорение</string></property></item><item><property name="text"><string>Движение по окружности</string></property></item></widget></item>
+     <item><widget class="QLabel" name="labelRadius"><property name="text"><string>Радиус, м:</string></property><property name="buddy"><cstring>spinRadius</cstring></property></widget></item>
+     <item><widget class="QDoubleSpinBox" name="spinRadius"><property name="minimum"><double>1.0</double></property><property name="maximum"><double>10000.0</double></property><property name="value"><double>100.0</double></property></widget></item>
+     <item><widget class="QLabel" name="labelPeriod"><property name="text"><string>Период оборота, с:</string></property><property name="buddy"><cstring>spinPeriod</cstring></property></widget></item>
+     <item><widget class="QDoubleSpinBox" name="spinPeriod"><property name="minimum"><double>1.0</double></property><property name="maximum"><double>3600.0</double></property><property name="value"><double>40.0</double></property></widget></item>
+     <item><widget class="QLabel" name="labelAx"><property name="text"><string>Ускорение X, м/с²:</string></property><property name="buddy"><cstring>lineEditAx</cstring></property></widget></item>
+     <item><widget class="QLineEdit" name="lineEditAx"><property name="text"><string>0.5</string></property><property name="accessibleName"><string>Ускорение X</string></property></widget></item>
+     <item><widget class="QLabel" name="labelAy"><property name="text"><string>Ускорение Y, м/с²:</string></property><property name="buddy"><cstring>lineEditAy</cstring></property></widget></item>
+     <item><widget class="QLineEdit" name="lineEditAy"><property name="text"><string>0.3</string></property><property name="accessibleName"><string>Ускорение Y</string></property></widget></item>
+     <item><widget class="QLabel" name="labelLegend"><property name="sizePolicy"><sizepolicy hsizetype="Preferred" vsizetype="Fixed"><horstretch>0</horstretch><verstretch>0</verstretch></sizepolicy></property><property name="text"><string>Смещение акселерометра: 0.02 м/с²
+по каждой оси. Шаг: 50 мс.</string></property></widget></item>
+     <item><widget class="QCheckBox" name="checkAutoFollow"><property name="text"><string>Автообзор траекторий (F)</string></property><property name="checked"><bool>true</bool></property><property name="toolTip"><string>Показывать траектории целиком. Колесо и перетаскивание переключают камеру в ручной режим.</string></property></widget></item>
+     <item><widget class="QPushButton" name="btnStart"><property name="text"><string>Старт</string></property></widget></item>
+     <item><widget class="QPushButton" name="btnCorrect"><property name="text"><string>Коррекция</string></property><property name="toolTip"><string>Совместить оценку с истиной и обнулить оценённую скорость, как в задании.</string></property></widget></item>
+     <item><widget class="QPushButton" name="btnReset"><property name="text"><string>Сброс</string></property></widget></item>
+     <item><widget class="QLabel" name="labelStatus"><property name="alignment"><set>Qt::AlignLeft|Qt::AlignTop</set></property><property name="minimumSize"><size><width>270</width><height>150</height></size></property><property name="text"><string>Готово</string></property><property name="wordWrap"><bool>true</bool></property><property name="textInteractionFlags"><set>Qt::TextSelectableByMouse</set></property></widget></item>
+     <item><spacer name="verticalSpacer"><property name="orientation"><enum>Qt::Vertical</enum></property><property name="sizeHint" stdset="0"><size><width>20</width><height>40</height></size></property></spacer></item>
+    </layout></item>
+   </layout>
+  </widget>
+ </widget>
+ <tabstops><tabstop>comboMotion</tabstop><tabstop>spinRadius</tabstop><tabstop>spinPeriod</tabstop><tabstop>lineEditAx</tabstop><tabstop>lineEditAy</tabstop><tabstop>checkAutoFollow</tabstop><tabstop>btnStart</tabstop><tabstop>btnCorrect</tabstop><tabstop>btnReset</tabstop></tabstops>
+ <customwidgets><customwidget><class>TrajectoryView</class><extends>QGraphicsView</extends><header>trajectoryview.h</header></customwidget></customwidgets>
+ <resources/>
+ <connections/>
+</ui>

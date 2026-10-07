@@ -1,0 +1,9 @@
+/build*/
+*.user
+
+# Local agent/runtime state
+/.agents/
+/.codex/
+/.codegraph
+/.omo/
+/.omx/
