@@ -241,6 +241,171 @@ void circleConfiguration()
                "start preserves existing state while switching modes");
 }
 
+void filterSwitching(bool circle)
+{
+    navigation::Simulation simulation;
+    navigation::Simulation baseline;
+    simulation.setFilterParameters(0.0, 2.0);
+    simulation.setCorrectionEnabled(false);
+    baseline.setCorrectionEnabled(false);
+    if (circle) {
+        simulation.configureCircle(100, 40);
+        baseline.configureCircle(100, 40);
+    } else {
+        simulation.start({0.5, -0.3});
+        baseline.start({0.5, -0.3});
+    }
+    advance(simulation, 600);
+    advance(baseline, 600);
+    vectorNear(simulation.state().filteredPosition, simulation.state().estimatedPosition,
+               "disabled filter follows raw INS");
+    vectorNear(simulation.state().filteredVelocity, simulation.state().estimatedVelocity,
+               "disabled filter retains INS velocity");
+    const auto beforeEnable = simulation.state();
+    simulation.setCorrectionEnabled(true);
+    vectorNear(simulation.state().filteredPosition, beforeEnable.filteredPosition,
+               "enabling correction does not teleport");
+    vectorNear(simulation.state().filteredVelocity, beforeEnable.filteredVelocity,
+               "enabling correction does not reset velocity");
+    near(simulation.state().time, beforeEnable.time, "enabling preserves time");
+    advance(simulation, 600);
+    advance(baseline, 600);
+    check(simulation.filteredError() < 0.2, "filter recovers after enabling in motion");
+    vectorNear(simulation.state().truePosition, baseline.state().truePosition,
+               "filter does not change truth");
+    vectorNear(simulation.state().estimatedPosition, baseline.state().estimatedPosition,
+               "filter does not change raw INS");
+    const auto beforeDisable = simulation.state();
+    simulation.setCorrectionEnabled(false);
+    vectorNear(simulation.state().filteredPosition, beforeDisable.filteredPosition,
+               "disabling preserves position");
+    vectorNear(simulation.state().filteredVelocity, beforeDisable.filteredVelocity,
+               "disabling preserves velocity");
+    advance(simulation, 400);
+    constexpr double elapsed = 400 * navigation::Simulation::timeStep;
+    const double bias = 0.5 * simulation.drift * elapsed * elapsed;
+    vectorNear(simulation.state().filteredPosition,
+               {simulation.state().truePosition.x + beforeDisable.filteredPosition.x - beforeDisable.truePosition.x
+                    + (beforeDisable.filteredVelocity.x - beforeDisable.trueVelocity.x) * elapsed + bias,
+                simulation.state().truePosition.y + beforeDisable.filteredPosition.y - beforeDisable.truePosition.y
+                    + (beforeDisable.filteredVelocity.y - beforeDisable.trueVelocity.y) * elapsed + bias},
+               "disabled correction continues inertial integration from current state");
+    check(simulation.filteredError() > 2.0, "drift resumes while correction is disabled");
+    simulation.setCorrectionEnabled(true);
+    advance(simulation, 600);
+    check(simulation.filteredError() < 0.2, "filter recovers after re-enabling");
+    const auto beforeManual = simulation.state();
+    simulation.correct();
+    vectorNear(simulation.state().filteredPosition, beforeManual.filteredPosition,
+               "manual INS correction does not change filter position");
+    vectorNear(simulation.state().filteredVelocity, beforeManual.filteredVelocity,
+               "manual INS correction does not reset filter velocity");
+}
+
+void filterMeasurements()
+{
+    navigation::Simulation simulation;
+    simulation.setFilterParameters(0.0, 2.0);
+    simulation.start({0.5, 0.3});
+    advance(simulation, 3);
+    check(!simulation.externalMeasurement(), "no measurement before 0.2 seconds");
+    vectorNear(simulation.state().filteredPosition, simulation.state().estimatedPosition,
+               "no correction without a fresh measurement");
+    simulation.step();
+    check(simulation.externalMeasurement().has_value(), "measurement arrives at 5 Hz");
+    vectorNear(*simulation.externalMeasurement(), simulation.state().truePosition,
+               "zero-noise sensor gives current position");
+    const double expectedPositionGain = 1.0 - std::exp(-0.2);
+    const double expectedVelocityGain = std::pow(1.0 - std::exp(-0.1), 2) / 0.2;
+    near(simulation.state().filteredPosition.x - simulation.state().truePosition.x,
+         (1.0 - expectedPositionGain) * 0.0004, "position feedback at first measurement");
+    near(simulation.state().filteredVelocity.x - simulation.state().trueVelocity.x,
+         0.004 - expectedVelocityGain * 0.0004, "velocity feedback at first measurement");
+    const auto lastMeasurement = *simulation.externalMeasurement();
+    const auto before = simulation.state();
+    simulation.step();
+    vectorNear(*simulation.externalMeasurement(), lastMeasurement, "measurement held between sensor updates");
+    near(simulation.state().filteredPosition.x,
+         before.filteredPosition.x + before.filteredVelocity.x * 0.05 + 0.5 * 0.52 * 0.05 * 0.05,
+         "old measurement is not reapplied between updates");
+    simulation.setExternalAvailable(false);
+    check(!simulation.externalMeasurement(), "disconnect clears stale sensor reading");
+    advance(simulation, 600);
+    check(!simulation.externalMeasurement(), "disconnected sensor produces no readings");
+    check(simulation.filteredError() > 10.0, "filter drifts without external sensor");
+    const auto disconnected = simulation.state();
+    simulation.setExternalAvailable(true);
+    vectorNear(simulation.state().filteredPosition, disconnected.filteredPosition,
+               "reconnection waits for a fresh reading");
+    advance(simulation, 600);
+    check(simulation.filteredError() < 0.2, "filter recovers after sensor reconnects");
+}
+
+void filterNoiseAndReset()
+{
+    for (bool circle : {false, true}) {
+        navigation::Simulation simulation;
+        if (circle) simulation.configureCircle(100, 40);
+        else simulation.start({0.5, 0.3});
+        double squaredError = 0.0;
+        constexpr int samples = 1200;
+        for (int sample = 0; sample < samples; ++sample) {
+            simulation.step();
+            squaredError += simulation.filteredError() * simulation.filteredError();
+        }
+        check(std::sqrt(squaredError / samples) < 1.0,
+              "noisy filter remains within one metre RMS over 60 seconds");
+        check(simulation.filteredError() < simulation.error(), "filter improves on raw INS with noisy sensor");
+        const auto firstRun = simulation.state();
+        const auto measurement = *simulation.externalMeasurement();
+        simulation.reset();
+        check(!simulation.externalMeasurement(), "reset clears measurements");
+        vectorNear(simulation.state().filteredPosition, {300, 200}, "reset restores filtered position");
+        vectorNear(simulation.state().filteredVelocity, {}, "reset clears filtered velocity");
+        if (circle) simulation.configureCircle(100, 40);
+        else simulation.start({0.5, 0.3});
+        advance(simulation, samples);
+        vectorNear(simulation.state().filteredPosition, firstRun.filteredPosition,
+                   "reset reproduces the same experiment");
+        vectorNear(*simulation.externalMeasurement(), measurement, "reset reproduces sensor noise");
+        simulation.setCorrectionEnabled(false);
+        simulation.setExternalAvailable(false);
+        simulation.reset();
+        check(!simulation.correctionEnabled() && !simulation.externalAvailable(),
+              "reset preserves user switch settings");
+    }
+}
+
+void filterParameterValidation()
+{
+    navigation::Simulation simulation;
+    for (double invalid : {-1.0, 10.01, std::numeric_limits<double>::infinity(),
+                           std::numeric_limits<double>::quiet_NaN()}) {
+        bool threw = false;
+        try { simulation.setFilterParameters(invalid, 2.0); }
+        catch (const std::invalid_argument&) { threw = true; }
+        check(threw, "invalid sensor noise rejected");
+    }
+    for (double invalid : {0.0, 0.199, 20.01, std::numeric_limits<double>::infinity(),
+                           std::numeric_limits<double>::quiet_NaN()}) {
+        bool threw = false;
+        try { simulation.setFilterParameters(0.5, invalid); }
+        catch (const std::invalid_argument&) { threw = true; }
+        check(threw, "invalid response time rejected");
+    }
+    for (double response : {0.2, 20.0}) {
+        simulation.reset();
+        simulation.setFilterParameters(0.0, response);
+        simulation.start({-100, 100});
+        advance(simulation, 12000);
+        check(std::isfinite(simulation.filteredError()) && simulation.filteredError() < 12.0,
+              "filter remains bounded at response-time limits");
+    }
+    simulation.setFilterParameters(10.0, 2.0);
+    simulation.step();
+    check(std::isfinite(simulation.filteredError()), "maximum sensor noise accepted");
+}
+
 } // namespace
 
 int main()
@@ -254,6 +419,11 @@ int main()
     circleTrajectory();
     circleCorrection();
     circleConfiguration();
+    filterSwitching(false);
+    filterSwitching(true);
+    filterMeasurements();
+    filterNoiseAndReset();
+    filterParameterValidation();
     if (failures != 0) {
         std::cerr << failures << " checks failed\n";
         return EXIT_FAILURE;

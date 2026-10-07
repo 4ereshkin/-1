@@ -1,42 +1,49 @@
 # Design
+
 ## Source of truth
-Active, 2026-10-07. Desktop Qt Widgets, один экран. Основание: исходный PDF,
-README.md, src/mainwindow.ui и текущий запрос о сетке, камере и круговом движении.
-## Brand
-Учебный инженерный инструмент. Численные значения важнее декоративности.
+Active, 2026-10-07. Desktop Qt Widgets, one window. References: the assignment PDF,
+README.md, src/mainwindow.ui, and user requests for circular motion, live filter
+correction, the supplied drone SVG, and flight audio.
+
 ## Product goals
-Показывать накопление ошибки ИНС на прямолинейном и круговом движении;
-свободно изучать траектории. Не заменять реальный полётный контроллер.
-## Personas and jobs
-Студент: задать движение, увидеть дрейф, применить коррекцию и объяснить результат.
-## Information architecture
-Слева сцена с сеткой и подписями точек, справа параметры движения и действия.
-## Design principles
-Сохранять существующий режим; ручной зум не должен сбрасываться таймером.
-Автообзор возвращается явным действием. Круг настраивается до начала нового опыта.
-## Visual language
-Светлый фон, ненавязчивая координатная сетка, усиленные нулевые оси.
-Истина зелёная, ИНС синяя; цвет дублируется текстом. Системные шрифты.
-## Components
-TrajectoryView (promoted QGraphicsView в .ui): сетка, камера, экранные подписи около маркеров. QComboBox режима,
-QDoubleSpinBox радиуса/периода, QCheckBox автообзора. Стандартные кнопки Qt.
-## Accessibility
-Клавиатура: +/- масштаб, стрелки перемещение, F автообзор. Фокус видимый,
-подписи и tooltips русские; размеры текста не зависят от масштаба сцены.
-## Responsive behavior
-Desktop, минимум ширины сцены 500 px. Правая панель по содержимому.
-При изменении окна ручная камера сохраняется; автообзор подстраивается.
-## Interaction states
-Колесо/перетаскивание/стрелки отключают автообзор. Галочка или F восстанавливают.
-Во время движения параметры недоступны; режим/радиус/период меняются после сброса.
-Постоянные ускорения можно менять на паузе. Коррекция остаётся как в задании.
-## Content voice
-Краткие русские подписи, единицы м, с, м/с². Чётко различать истину и оценку.
-## Implementation constraints
-Qt 5/6, C++17, без новых зависимостей. Сетка рисуется только в видимой области
-с адаптивным шагом; текст в экранных пикселях. Расчётная модель не зависит от Qt.
-GUI и модель проверяются тестами, финальная форма — снимком.
-## Open questions
-Нет блокирующих вопросов. Легенда в левом верхнем углу удалена по последнему
-запросу пользователя; подписи точек сохранены. Круг задаётся радиусом и периодом,
-идёт по часовой стрелке при Y вниз.
+Help a student compare true motion, inertial drift, and complementary filtering.
+Show the effect of disabling and restoring external measurements during motion.
+This is an educational simulation, not a flight controller.
+
+## Layout and appearance
+Place the trajectory scene on the left and scrollable controls on the right.
+Use a light background, an adaptive coordinate grid, and stronger zero axes.
+Truth is green, raw INS is blue, and the filtered estimate is orange.
+Label trajectories in text as well as color. Use system fonts.
+Keep the scene at least 500 logical pixels wide and preserve manual camera settings.
+
+## Motion and correction
+Configure constant acceleration or a clockwise circle before starting.
+Lock mode, radius, and period until reset. Allow acceleration edits while paused.
+Keep automatic correction, sensor availability, noise, and response time editable
+during motion and pause. Switching correction must preserve position, velocity,
+simulation time, and trajectory history. Apply feedback only on fresh measurements.
+The assignment's one-shot correction acts on raw INS only and resets its velocity.
+Reset clears all trajectories and repeats the noise sequence while retaining settings.
+
+## Drone and audio
+Anchor the provided SVG at the true position and orient it along true velocity.
+Keep its displayed size independent of scene zoom.
+Embed SVG and MP3 assets in Qt resources rather than using external absolute paths.
+Flight sound is opt-in at 30% volume, loops during motion, pauses with the simulation,
+and rewinds on reset. Switching sound must not affect motion or correction.
+Report playback errors without interrupting the simulator.
+
+## Accessibility and controls
+Use Russian UI labels and tooltips with metres, seconds, and metres per second squared.
+Keyboard controls: +/- for zoom, arrows for pan, and F for automatic overview.
+Manual camera input disables automatic overview; the checkbox or F restores it.
+Keep marker labels readable at every zoom level and controls accessible by keyboard.
+
+## Implementation and verification
+C++17, Qt Widgets, Svg, and Multimedia; Qt 6 also requires SvgWidgets.
+Keep the numerical model independent of Qt and the controls editable in Designer.
+Verify motion, correction toggles, sensor loss, and reset with numerical tests.
+Verify GUI controls, drone anchoring, camera behavior, and audio lifecycle with QtTest.
+Inspect screenshots on the native Windows platform after layout changes.
+Document the tested toolchain and do not imply untested Qt/MSVC combinations passed.

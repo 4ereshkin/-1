@@ -51,6 +51,7 @@ void Simulation::configureCircle(double radius, double period)
     state_ = State{};
     state_.trueVelocity = {0.0, radius_ * angularVelocity_};
     state_.estimatedVelocity = state_.trueVelocity;
+    state_.filteredVelocity = state_.trueVelocity;
     mode_ = MotionMode::Circle;
 }
 
@@ -75,6 +76,8 @@ void Simulation::step()
         integrate(state_.truePosition, state_.trueVelocity, acceleration_);
         integrate(state_.estimatedPosition, state_.estimatedVelocity,
                   {acceleration_.x + drift, acceleration_.y + drift});
+        integrate(state_.filteredPosition, state_.filteredVelocity,
+                  {acceleration_.x + drift, acceleration_.y + drift});
     } else {
         const double angle = angularVelocity_ * state_.time;
         const double delta = angularVelocity_ * timeStep;
@@ -91,16 +94,74 @@ void Simulation::step()
             -2.0 * radius_ * angularVelocity_ * halfSin * std::sin(angle + delta / 2.0)};
         integrate(state_.truePosition, state_.trueVelocity, {});
         integrate(state_.estimatedPosition, state_.estimatedVelocity, {drift, drift});
-        for (auto* position : {&state_.truePosition, &state_.estimatedPosition}) {
+        integrate(state_.filteredPosition, state_.filteredVelocity, {drift, drift});
+        for (auto* position : {&state_.truePosition, &state_.estimatedPosition, &state_.filteredPosition}) {
             position->x += positionIncrement.x;
             position->y += positionIncrement.y;
         }
-        for (auto* velocity : {&state_.trueVelocity, &state_.estimatedVelocity}) {
+        for (auto* velocity : {&state_.trueVelocity, &state_.estimatedVelocity, &state_.filteredVelocity}) {
             velocity->x += velocityIncrement.x;
             velocity->y += velocityIncrement.y;
         }
     }
     state_.time += timeStep;
+    updateFilter();
+}
+
+void Simulation::updateFilter()
+{
+    measurementStep_ = (measurementStep_ + 1) % measurementSteps;
+    if (measurementStep_ != 0 || !externalAvailable_) return;
+    externalMeasurement_ = Vector2{
+        state_.truePosition.x + measurementNoise_ * noise_(random_),
+        state_.truePosition.y + measurementNoise_ * noise_(random_)};
+    if (!correctionEnabled_) return;
+    const double pole = std::exp(-measurementInterval / responseTime_);
+    const double positionGain = 1.0 - pole * pole;
+    const double velocityGain = (1.0 - pole) * (1.0 - pole) / measurementInterval;
+    const Vector2 residual{
+        externalMeasurement_->x - state_.filteredPosition.x,
+        externalMeasurement_->y - state_.filteredPosition.y};
+    state_.filteredPosition.x += positionGain * residual.x;
+    state_.filteredPosition.y += positionGain * residual.y;
+    state_.filteredVelocity.x += velocityGain * residual.x;
+    state_.filteredVelocity.y += velocityGain * residual.y;
+}
+
+void Simulation::setCorrectionEnabled(bool enabled)
+{
+    correctionEnabled_ = enabled;
+}
+
+bool Simulation::correctionEnabled() const
+{
+    return correctionEnabled_;
+}
+
+void Simulation::setExternalAvailable(bool available)
+{
+    externalAvailable_ = available;
+    if (!available) externalMeasurement_.reset();
+}
+
+bool Simulation::externalAvailable() const
+{
+    return externalAvailable_;
+}
+
+void Simulation::setFilterParameters(double noise, double responseTime)
+{
+    if (!std::isfinite(noise) || noise < 0.0 || noise > 10.0 ||
+        !std::isfinite(responseTime) || responseTime < 0.2 || responseTime > 20.0) {
+        throw std::invalid_argument("Noise must be in [0, 10] and response time in [0.2, 20]");
+    }
+    measurementNoise_ = noise;
+    responseTime_ = responseTime;
+}
+
+const std::optional<Vector2>& Simulation::externalMeasurement() const
+{
+    return externalMeasurement_;
 }
 
 void Simulation::correct()
@@ -117,12 +178,22 @@ void Simulation::reset()
     mode_ = MotionMode::ConstantAcceleration;
     radius_ = 0.0;
     angularVelocity_ = 0.0;
+    measurementStep_ = 0;
+    externalMeasurement_.reset();
+    random_.seed(42);
+    noise_.reset();
 }
 
 double Simulation::error() const
 {
     return std::hypot(state_.estimatedPosition.x - state_.truePosition.x,
                       state_.estimatedPosition.y - state_.truePosition.y);
+}
+
+double Simulation::filteredError() const
+{
+    return std::hypot(state_.filteredPosition.x - state_.truePosition.x,
+                      state_.filteredPosition.y - state_.truePosition.y);
 }
 
 } // namespace navigation

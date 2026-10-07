@@ -1,0 +1,6 @@
+<RCC>
+ <qresource prefix="/assets">
+  <file alias="drone.svg">../assets/drone.svg</file>
+  <file alias="drone-flight.mp3">../assets/drone-flight.mp3</file>
+ </qresource>
+</RCC>

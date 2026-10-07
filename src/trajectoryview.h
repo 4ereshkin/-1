@@ -6,7 +6,7 @@ class TrajectoryView : public QGraphicsView {
 public:
     explicit TrajectoryView(QWidget *parent = nullptr);
     void setContentBounds(const QRectF &bounds);
-    void setPositions(QPointF truth, QPointF estimate);
+    void setPositions(QPointF truth, QPointF estimate, QPointF filtered);
     bool autoOverview() const { return autoOverview_; }
     double gridStep() const;
 public slots:
@@ -28,5 +28,6 @@ private:
     QRectF contentBounds_{-20, -20, 640, 440};
     QPointF truth_{300, 200};
     QPointF estimate_{300, 200};
+    QPointF filtered_{300, 200};
     bool autoOverview_ = true;
 };

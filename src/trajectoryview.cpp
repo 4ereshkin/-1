@@ -17,9 +17,10 @@ TrajectoryView::TrajectoryView(QWidget *parent) : QGraphicsView(parent) {
     setFocusPolicy(Qt::StrongFocus);
     setViewportUpdateMode(QGraphicsView::FullViewportUpdate);
 }
-void TrajectoryView::setPositions(QPointF truth, QPointF estimate) {
+void TrajectoryView::setPositions(QPointF truth, QPointF estimate, QPointF filtered) {
     truth_ = truth;
     estimate_ = estimate;
+    filtered_ = filtered;
     viewport()->update();
 }
 void TrajectoryView::ensureRoom() {
@@ -105,8 +106,9 @@ void TrajectoryView::drawForeground(QPainter *painter, const QRectF &) {
         painter->setPen(color);
         painter->drawText(box.adjusted(5, 0, -2, 0), Qt::AlignVCenter, text);
     };
-    label(truth_, tr("Истина"), QColor(0, 125, 50), -29);
+    label(truth_, tr("Истина"), QColor(0, 125, 50), -49);
     label(estimate_, tr("Оценка ИНС"), QColor(30, 80, 230), 7);
+    label(filtered_, tr("Фильтр"), QColor(175, 80, 0), -75);
     painter->restore();
 }
 void TrajectoryView::zoomAt(double factor, const QPoint &anchor) {
